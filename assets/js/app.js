@@ -139,11 +139,14 @@ function resetForm() {
   for (const el of document.querySelectorAll('#application input')) {
     if (el.type === 'checkbox') el.checked = el.id === 'showPrice';
     else el.value = el.id === 'price' ? '0' : '';
+    el.removeAttribute('aria-invalid');
   }
   document.getElementById('gender').value = '';
+  document.getElementById('foreignDocType').value = '';
   document.getElementById('analysisList').innerHTML = '';
   analyses = 0;
   document.getElementById('requestFeedback').textContent = '';
+  updateForeignerFields();
 }
 
 function addAnalysis() {
@@ -151,7 +154,24 @@ function addAnalysis() {
 }
 
 function saveRequest() {
-  document.getElementById('requestFeedback').textContent = 'Демонстрационный макет: отправка заявки на сервер не подключена.';
+  const feedback = document.getElementById('requestFeedback');
+  const foreign = document.getElementById('foreign').checked;
+  const docType = document.getElementById('foreignDocType');
+  const docNumber = document.getElementById('foreignDocNumber');
+  docType.removeAttribute('aria-invalid');
+  docNumber.removeAttribute('aria-invalid');
+  if (foreign && !docType.value) {
+    feedback.textContent = 'Для иностранного гражданина выберите тип документа.';
+    docType.setAttribute('aria-invalid', 'true');
+    docType.focus();
+  } else if (foreign && !docNumber.value.trim()) {
+    feedback.textContent = 'Для иностранного гражданина укажите номер документа.';
+    docNumber.setAttribute('aria-invalid', 'true');
+    docNumber.focus();
+  } else {
+    feedback.textContent = 'Демонстрационный макет: отправка заявки на сервер не подключена.';
+  }
+  if (window.i18n?.refresh) window.i18n.refresh();
 }
 
 function changePassword() {
@@ -169,11 +189,39 @@ function saveBloodPrice() {
 let saved = null;
 try { saved = localStorage.getItem('demoBloodPrice'); } catch (e) {}
 if (saved !== null) document.getElementById('bloodPrice').value = saved;
-document.getElementById('foreign').addEventListener('change', e => {
-  const i = document.getElementById('iin');
-  i.disabled = e.target.checked;
-  if (e.target.checked) i.value = '';
-});
+// The identity fields are conditional: never submit a hidden document or a
+// simultaneously entered IIN. Document identifiers stay strings (leading zeroes).
+function updateForeignerFields() {
+  const toggle = document.getElementById('foreign');
+  const isForeign = toggle.checked;
+  const iin = document.getElementById('iin');
+  const block = document.getElementById('foreignFields');
+  iin.disabled = isForeign;
+  iin.required = !isForeign;
+  if (isForeign) iin.value = '';
+  block.hidden = !isForeign;
+  toggle.setAttribute('aria-expanded', String(isForeign));
+  for (const el of block.querySelectorAll('input,select')) {
+    el.disabled = !isForeign;
+    if (!isForeign) el.removeAttribute('aria-invalid');
+  }
+  document.getElementById('foreignDocType').required = isForeign;
+  document.getElementById('foreignDocNumber').required = isForeign;
+  if (!isForeign) {
+    // Prevent stale foreign-document details from remaining inside a standard request.
+    block.querySelectorAll('input').forEach(el => el.value = '');
+    document.getElementById('foreignDocType').value = '';
+    }
+  document.getElementById('requestFeedback').textContent = '';
+}
+document.getElementById('foreign').addEventListener('change', updateForeignerFields);
+for (const id of ['foreignDocType','foreignDocNumber']) {
+  document.getElementById(id).addEventListener('input', event => {
+    event.target.removeAttribute('aria-invalid');
+    document.getElementById('requestFeedback').textContent = '';
+  });
+}
+updateForeignerFields();
 
 function openAllergenFlow() {
   navigate('allergenFlow');
